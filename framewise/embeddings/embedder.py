@@ -98,3 +98,130 @@ class FrameWiseEmbedder:
         )
         return embeddings
     
+    def embed_image(self, image_path: Union[str, Path]) -> np.ndarray:
+        
+        self._load_vision_model()
+        
+        # Load image
+        image = Image.open(image_path).convert("RGB")
+        
+        # Process and embed
+        inputs = self._vision_processor(images=image, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        with torch.no_grad():
+            image_features = self._vision_model.get_image_features(**inputs)
+        
+        # Convert to numpy
+        embedding = image_features.cpu().numpy().flatten()
+        return embedding
+    
+    def embed_image_batch(
+        self,
+        image_paths: List[Union[str, Path]],
+        batch_size: int = 8
+    ) -> np.ndarray:
+        
+        self._load_vision_model()
+        
+        all_embeddings = []
+        
+        for i in range(0, len(image_paths), batch_size):
+            batch_paths = image_paths[i:i + batch_size]
+            
+            # Load images
+            images = [Image.open(path).convert("RGB") for path in batch_paths]
+            
+            # Process batch
+            inputs = self._vision_processor(images=images, return_tensors="pt")
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
+            with torch.no_grad():
+                image_features = self._vision_model.get_image_features(**inputs)
+            
+            # Convert to numpy
+            embeddings = image_features.cpu().numpy()
+            all_embeddings.append(embeddings)
+        
+        return np.vstack(all_embeddings)
+    
+    def embed_frame(self, frame: ExtractedFrame) -> Dict[str, Union[str, float, np.ndarray, None]]:
+        
+        # Embed the image
+        image_embedding = self.embed_image(frame.path)
+        
+        # Embed the transcript text if available
+        text_embedding = None
+        text = None
+        if frame.transcript_segment:
+            text = frame.transcript_segment.text
+            text_embedding = self.embed_text(text)
+        
+        return {
+            "frame_id": frame.frame_id,
+            "timestamp": frame.timestamp,
+            "image_embedding": image_embedding,
+            "text_embedding": text_embedding,
+            "text": text,
+            "frame_path": str(frame.path),
+            "extraction_reason": frame.extraction_reason,
+            "quality_score": frame.quality_score,
+        }
+    
+    def embed_frames_batch(
+        self,
+        frames: List[ExtractedFrame],
+        batch_size: int = 8
+    ) -> List[Dict[str, Union[str, float, np.ndarray, None]]]:
+        
+        logger.info(f"Embedding {len(frames)} frames...")
+        
+        # Extract image paths and texts
+        image_paths = [frame.path for frame in frames]
+        texts = [
+            frame.transcript_segment.text if frame.transcript_segment else ""
+            for frame in frames
+        ]
+        
+        # Batch embed images
+        logger.info("Generating image embeddings...")
+        image_embeddings = self.embed_image_batch(image_paths, batch_size)
+        
+        # Batch embed texts
+        logger.info("Generating text embeddings...")
+        text_embeddings = self.embed_text_batch(texts, batch_size=32)
+        
+        # Combine into result dictionaries
+        results = []
+        for i, frame in enumerate(frames):
+            result = {
+                "frame_id": frame.frame_id,
+                "timestamp": frame.timestamp,
+                "image_embedding": image_embeddings[i],
+                "text_embedding": text_embeddings[i],
+                "text": texts[i],
+                "frame_path": str(frame.path),
+                "extraction_reason": frame.extraction_reason,
+                "quality_score": frame.quality_score,
+            }
+            results.append(result)
+        
+        logger.success(f"Generated embeddings for {len(frames)} frames")
+        return results
+    
+    def get_embedding_dimensions(self) -> Dict[str, int]:
+        
+        self._load_text_model()
+        self._load_vision_model()
+        
+        # Get dimensions
+        text_dim = self._text_model.get_sentence_embedding_dimension()
+        
+        # For CLIP, we need to check the model config
+        image_dim = self._vision_model.config.projection_dim
+        
+        return {
+            "text_embedding_dim": text_dim,
+            "image_embedding_dim": image_dim
+        }
+    
