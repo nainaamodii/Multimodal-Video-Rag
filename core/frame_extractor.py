@@ -32,3 +32,40 @@ from PIL import Image
 from loguru import logger
 
 from framewise.core.transcript_extractor import Transcript, TranscriptSegment
+
+@dataclass
+class ExtractedFrame:
+    
+    frame_id: str
+    path: Path
+    timestamp: float
+    transcript_segment: Optional[TranscriptSegment] = None
+    extraction_reason: str = "unknown"
+    scene_change_score: float = 0.0
+    quality_score: float = 1.0
+    
+    def to_dict(self) -> Dict[str, Union[str, float, Dict, None]]:
+        """Convert frame to dictionary format.
+        
+        Returns:
+            Dictionary containing all frame metadata.
+            
+        Example:
+            >>> frame.to_dict()
+            {
+                'frame_id': 'frame_0001',
+                'path': 'frames/frame_0001.jpg',
+                'timestamp': 12.5,
+                'extraction_reason': 'keyword:click',
+                'quality_score': 0.85
+            }
+        """
+        return {
+            "frame_id": self.frame_id,
+            "path": str(self.path),
+            "timestamp": self.timestamp,
+            "transcript_segment": self.transcript_segment.to_dict() if self.transcript_segment else None,
+            "extraction_reason": self.extraction_reason,
+            "scene_change_score": self.scene_change_score,
+            "quality_score": self.quality_score,
+        }
