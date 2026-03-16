@@ -442,3 +442,30 @@ class FrameExtractor:
                 merged.append((timestamp, reason, score))
         
         return merged
+    
+    def _extract_frame_at_timestamp(
+        self,
+        cap: cv2.VideoCapture,
+        timestamp: float,
+        fps: float
+    ) -> Optional[np.ndarray]:
+        """Extract a single frame at the given timestamp.
+        
+        Args:
+            cap: OpenCV VideoCapture object.
+            timestamp: Time in seconds to extract the frame.
+            fps: Frames per second of the video.
+        
+        Returns:
+            Frame as numpy array (BGR format), or None if extraction fails.
+        """
+        frame_number = int(timestamp * fps)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        
+        ret, frame = cap.read()
+        if not ret:
+            return None
+        
+        return frame
+    
+    
