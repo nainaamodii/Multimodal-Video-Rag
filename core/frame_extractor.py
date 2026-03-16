@@ -314,3 +314,53 @@ class FrameExtractor:
         
         logger.success(f"Extracted {len(extracted_frames)} frames to {output_dir}")
         return extracted_frames
+    
+    def _extract_by_scene_change(
+        self,
+        cap: cv2.VideoCapture,
+        fps: float
+    ) -> List[Tuple[float, str, float]]:
+        """Extract frames at scene changes using visual difference detection.
+        
+        Analyzes consecutive frames to detect significant visual changes that
+        indicate scene transitions, UI changes, or important visual moments.
+        
+        Args:
+            cap: OpenCV VideoCapture object for the video.
+            fps: Frames per second of the video.
+        
+        Returns:
+            List of tuples containing (timestamp, reason, score) for each
+            detected scene change.
+        
+        Note:
+            Samples every 30 frames for efficiency. Adjust sampling rate for
+            different video types or frame rates.
+        """
+        timestamps = []
+        prev_frame = None
+        frame_idx = 0
+        
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            if prev_frame is not None:
+                # Calculate scene change score
+                score = self._calculate_scene_change(prev_frame, frame)
+                
+                if score > self.scene_threshold:
+                    timestamp = frame_idx / fps
+                    timestamps.append((timestamp, "scene_change", score))
+            
+            prev_frame = frame
+            frame_idx += 1
+            
+            # Sample every N frames for efficiency
+            if frame_idx % 30 == 0:  # Check every 30 frames (~0.5s at 60fps)
+                continue
+        
+        return timestamps
