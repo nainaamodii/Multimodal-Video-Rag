@@ -364,3 +364,39 @@ class FrameExtractor:
                 continue
         
         return timestamps
+    
+    def _extract_by_transcript(
+        self,
+        transcript: Transcript
+    ) -> List[Tuple[float, str, float]]:
+        """Extract frames at important transcript moments.
+        
+        Identifies segments containing action keywords (e.g., "click", "select")
+        and extracts frames at those moments. This captures frames when the
+        narrator is describing actions.
+        
+        Args:
+            transcript: Transcript object with timestamped segments.
+        
+        Returns:
+            List of tuples containing (timestamp, reason, score) for each
+            keyword match. Timestamp is the midpoint of the segment.
+        
+        Note:
+            Only extracts one frame per segment, even if multiple keywords
+            are present.
+        """
+        timestamps = []
+        
+        for segment in transcript.segments:
+            text_lower = segment.text.lower()
+            
+            # Check for action keywords
+            for keyword in self.ACTION_KEYWORDS:
+                if keyword in text_lower:
+                    # Extract at the middle of the segment
+                    timestamp = (segment.start + segment.end) / 2
+                    timestamps.append((timestamp, f"keyword:{keyword}", 1.0))
+                    break  # One frame per segment
+        
+        return timestamps
