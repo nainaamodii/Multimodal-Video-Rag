@@ -172,3 +172,145 @@ class FrameExtractor:
         self.max_frames_per_video = max_frames_per_video
         self.scene_threshold = scene_threshold
         self.quality_threshold = quality_threshold
+
+    def extract(
+        self,
+        video_path: Union[str, Path],
+        transcript: Optional[Transcript] = None,
+        output_dir: Union[str, Path] = "frames",
+    ) -> List[ExtractedFrame]:
+        """Extract keyframes from a video file.
+        
+        Processes the video using the configured strategy to identify and extract
+        important frames. Frames are saved as JPEG images with metadata.
+        
+        Args:
+            video_path: Path to the video file to process. Supports common formats
+                (mp4, avi, mov, mkv, etc.).
+            transcript: Optional Transcript object for transcript-based or hybrid
+                extraction. Required if strategy is 'transcript' or 'hybrid'.
+                Defaults to None.
+            output_dir: Directory where extracted frames and metadata will be saved.
+                Will be created if it doesn't exist. Defaults to "frames".
+        
+        Returns:
+            List of ExtractedFrame objects, sorted by timestamp. Each frame includes
+            the image path, timestamp, quality score, and extraction reason.
+        
+        Raises:
+            FileNotFoundError: If the video file doesn't exist.
+            ValueError: If strategy is 'transcript' but no transcript is provided,
+                or if the video file cannot be opened.
+            RuntimeError: If frame extraction fails.
+        
+        Example:
+            >>> extractor = FrameExtractor(strategy="hybrid")
+            >>> transcript = TranscriptExtractor().extract("tutorial.mp4")
+            >>> frames = extractor.extract(
+            ...     "tutorial.mp4",
+            ...     transcript=transcript,
+            ...     output_dir="output/frames"
+            ... )
+            >>> print(f"Extracted {len(frames)} frames")
+            Extracted 15 frames
+            >>> for frame in frames[:3]:
+            ...     print(f"{frame.timestamp}s: {frame.extraction_reason}")
+            2.5s: scene_change
+            8.3s: keyword:click
+            15.7s: scene_change
+        """
+        video_path = Path(video_path)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        
+        logger.info(f"Extracting frames from: {video_path.name}")
+        logger.info(f"Strategy: {self.strategy}")
+        
+        # Open video
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            raise ValueError(f"Failed to open video: {video_path}")
+        
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total_frames / fps if fps > 0 else 0
+        
+        logger.info(f"Video: {duration:.1f}s, {fps:.1f} fps, {total_frames} frames")
+        
+        # Extract frames based on strategy
+        if self.strategy == "scene":
+            candidate_timestamps = self._extract_by_scene_change(cap, fps)
+        elif self.strategy == "transcript":
+            if transcript is None:
+                raise ValueError("Transcript required for 'transcript' strategy")
+            candidate_timestamps = self._extract_by_transcript(transcript)
+        elif self.strategy == "hybrid":
+            scene_timestamps = self._extract_by_scene_change(cap, fps)
+            transcript_timestamps = self._extract_by_transcript(transcript) if transcript else []
+            # Combine and deduplicate
+            candidate_timestamps = self._merge_timestamps(scene_timestamps, transcript_timestamps)
+        else:
+            raise ValueError(f"Unknown strategy: {self.strategy}")
+        
+        # Limit number of frames
+        if len(candidate_timestamps) > self.max_frames_per_video:
+            # Keep evenly distributed frames
+            step = len(candidate_timestamps) / self.max_frames_per_video
+            candidate_timestamps = [
+                candidate_timestamps[int(i * step)] 
+                for i in range(self.max_frames_per_video)
+            ]
+        
+        logger.info(f"Extracting {len(candidate_timestamps)} frames")
+        
+        # Extract and save frames
+        extracted_frames = []
+        for idx, timestamp_info in enumerate(candidate_timestamps):
+            if isinstance(timestamp_info, tuple):
+                timestamp, reason, score = timestamp_info
+            else:
+                timestamp, reason, score = timestamp_info, "unknown", 0.0
+            
+            frame = self._extract_frame_at_timestamp(cap, timestamp, fps)
+            if frame is None:
+                continue
+            
+            # Check quality
+            quality = self._assess_frame_quality(frame)
+            if quality < self.quality_threshold:
+                logger.debug(f"Skipping low quality frame at {timestamp:.1f}s")
+                continue
+            
+            # Save frame
+            frame_id = f"frame_{idx:04d}"
+            frame_filename = f"{frame_id}_t{timestamp:07.1f}s.jpg"
+            frame_path = output_dir / frame_filename
+            
+            cv2.imwrite(str(frame_path), frame)
+            
+            # Find associated transcript segment
+            segment = self._find_transcript_segment(transcript, timestamp) if transcript else None
+            
+            extracted_frame = ExtractedFrame(
+                frame_id=frame_id,
+                path=frame_path,
+                timestamp=timestamp,
+                transcript_segment=segment,
+                extraction_reason=reason,
+                scene_change_score=score,
+                quality_score=quality,
+            )
+            
+            extracted_frames.append(extracted_frame)
+            logger.debug(f"Extracted: {frame_filename}")
+        
+        cap.release()
+        
+        # Save metadata
+        self._save_metadata(extracted_frames, output_dir)
+        
+        logger.success(f"Extracted {len(extracted_frames)} frames to {output_dir}")
+        return extracted_frames
