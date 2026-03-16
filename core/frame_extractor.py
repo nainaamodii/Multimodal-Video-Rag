@@ -468,4 +468,77 @@ class FrameExtractor:
         
         return frame
     
+    def _calculate_scene_change(
+        self,
+        frame1: np.ndarray,
+        frame2: np.ndarray
+    ) -> float:
+        """Calculate scene change score between two frames.
+        
+        Computes the visual difference between consecutive frames using
+        grayscale conversion and absolute difference. Higher scores indicate
+        more significant visual changes.
+        
+        Args:
+            frame1: First frame as numpy array (BGR format).
+            frame2: Second frame as numpy array (BGR format).
+        
+        Returns:
+            Scene change score between 0 and 1, where:
+            - 0 = identical frames
+            - 1 = completely different frames
+            - Typical scene changes: 0.3-0.7
+        
+        Note:
+            Frames are resized to 320x240 for faster computation without
+            significant loss in change detection accuracy.
+        """
+        # Convert to grayscale
+        gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+        
+        # Resize for faster computation
+        gray1 = cv2.resize(gray1, (320, 240))
+        gray2 = cv2.resize(gray2, (320, 240))
+        
+        # Calculate absolute difference
+        diff = cv2.absdiff(gray1, gray2)
+        
+        # Calculate mean difference (normalized to 0-1)
+        score = np.mean(diff) / 255.0
+        
+        return score
     
+    def _assess_frame_quality(self, frame: np.ndarray) -> float:
+        """Assess frame quality using blur detection.
+        
+        Uses Laplacian variance to detect image sharpness. Blurry frames
+        (e.g., during camera movement) receive lower scores.
+        
+        Args:
+            frame: Frame as numpy array (BGR format).
+        
+        Returns:
+            Quality score between 0 and 1, where:
+            - 0 = very blurry
+            - 1 = very sharp
+            - Typical sharp frames: 0.5-1.0
+            - Typical blurry frames: 0.0-0.3
+        
+        Note:
+            Uses Laplacian variance with normalization. Typical values:
+            - <100 = blurry
+            - 100-500 = acceptable
+            - >500 = sharp
+        """
+        # Convert to grayscale
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate Laplacian variance (blur detection)
+        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        
+        # Normalize to 0-1 range (higher = sharper)
+        # Typical values: <100 = blurry, >500 = sharp
+        quality = min(laplacian_var / 500.0, 1.0)
+        
+        return quality
