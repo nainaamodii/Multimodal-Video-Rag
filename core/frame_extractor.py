@@ -542,3 +542,66 @@ class FrameExtractor:
         quality = min(laplacian_var / 500.0, 1.0)
         
         return quality
+    
+    def _find_transcript_segment(
+        self,
+        transcript: Transcript,
+        timestamp: float
+    ) -> Optional[TranscriptSegment]:
+        """Find the transcript segment that contains or is closest to the timestamp.
+        
+        Args:
+            transcript: Transcript object with segments.
+            timestamp: Time in seconds to find the segment for.
+        
+        Returns:
+            TranscriptSegment if found within 2 seconds, None otherwise.
+        
+        Note:
+            First tries to find a segment that contains the timestamp.
+            If none found, returns the closest segment within 2 seconds.
+        """
+        # Try to find segment containing the timestamp
+        for segment in transcript.segments:
+            if segment.start <= timestamp <= segment.end:
+                return segment
+        
+        # Find closest segment if not within any
+        closest = min(
+            transcript.segments,
+            key=lambda s: min(abs(s.start - timestamp), abs(s.end - timestamp))
+        )
+        
+        # Only return if reasonably close (within 2 seconds)
+        if min(abs(closest.start - timestamp), abs(closest.end - timestamp)) < 2.0:
+            return closest
+        
+        return None
+    
+    def _save_metadata(
+        self,
+        frames: List[ExtractedFrame],
+        output_dir: Path
+    ) -> None:
+        """Save frame metadata to JSON file.
+        
+        Creates a metadata.json file in the output directory containing
+        information about all extracted frames.
+        
+        Args:
+            frames: List of extracted frames.
+            output_dir: Directory where metadata.json will be saved.
+        
+        Raises:
+            IOError: If the metadata file cannot be written.
+        """
+        metadata = {
+            "total_frames": len(frames),
+            "frames": [frame.to_dict() for frame in frames]
+        }
+        
+        metadata_path = output_dir / "metadata.json"
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        
+        logger.debug(f"Saved metadata to {metadata_path}")
