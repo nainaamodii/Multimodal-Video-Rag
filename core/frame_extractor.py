@@ -400,3 +400,45 @@ class FrameExtractor:
                     break  # One frame per segment
         
         return timestamps
+    
+    def _merge_timestamps(
+        self,
+        scene_timestamps: List[Tuple[float, str, float]],
+        transcript_timestamps: List[Tuple[float, str, float]],
+        merge_window: float = 2.0
+    ) -> List[Tuple[float, str, float]]:
+        """Merge timestamps from different strategies, removing duplicates.
+        
+        Combines timestamps from scene detection and transcript analysis,
+        removing duplicates that are too close together. When timestamps
+        are within the merge window, keeps the one with the higher score.
+        
+        Args:
+            scene_timestamps: Timestamps from scene change detection.
+            transcript_timestamps: Timestamps from transcript analysis.
+            merge_window: Time window in seconds for considering timestamps
+                as duplicates. Defaults to 2.0 seconds.
+        
+        Returns:
+            Merged and deduplicated list of timestamps, sorted by time.
+        
+        Example:
+            >>> scene_ts = [(1.0, "scene_change", 0.8), (5.0, "scene_change", 0.6)]
+            >>> trans_ts = [(1.5, "keyword:click", 1.0), (10.0, "keyword:save", 1.0)]
+            >>> merged = extractor._merge_timestamps(scene_ts, trans_ts)
+            >>> # (1.5, "keyword:click", 1.0) kept over (1.0, ...) due to higher score
+        """
+        all_timestamps = scene_timestamps + transcript_timestamps
+        all_timestamps.sort(key=lambda x: x[0])
+        
+        merged = []
+        for timestamp, reason, score in all_timestamps:
+            # Check if too close to previous timestamp
+            if merged and abs(merged[-1][0] - timestamp) < merge_window:
+                # Keep the one with higher score
+                if score > merged[-1][2]:
+                    merged[-1] = (timestamp, reason, score)
+            else:
+                merged.append((timestamp, reason, score))
+        
+        return merged
