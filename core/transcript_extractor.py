@@ -173,3 +173,75 @@ class Transcript:
             segments=segments,
             full_text=data['full_text']
         )
+    
+class TranscriptExtractor:
+    """Extract transcripts from video files using OpenAI Whisper.
+    
+    This class provides an interface to the Whisper speech recognition model
+    for extracting transcripts from video files. It supports multiple model
+    sizes, languages, and can process videos in batch.
+    
+    The Whisper model is loaded lazily on first use to avoid unnecessary
+    initialization overhead.
+    
+    Attributes:
+        model_size: The Whisper model size being used.
+        device: The device (CPU/CUDA) the model runs on.
+        language: The language code for transcription, or None for auto-detection.
+    
+    Example:
+        Basic usage::
+        
+            extractor = TranscriptExtractor(model_size="base", language="en")
+            transcript = extractor.extract("video.mp4")
+            print(transcript.full_text)
+        
+        Batch processing::
+        
+            videos = ["video1.mp4", "video2.mp4"]
+            transcripts = extractor.extract_batch(videos, output_dir="transcripts/")
+    """
+    
+    def __init__(
+        self,
+        model_size: str = "base",
+        device: Optional[str] = None,
+        language: Optional[str] = None
+    ) -> None:
+        """Initialize the transcript extractor.
+        
+        Args:
+            model_size: Whisper model size to use. Options are:
+                - 'tiny': Fastest, least accurate (~1GB RAM)
+                - 'base': Good balance of speed and accuracy (~1GB RAM)
+                - 'small': Better accuracy (~2GB RAM)
+                - 'medium': High accuracy (~5GB RAM)
+                - 'large': Best accuracy (~10GB RAM)
+                Defaults to 'base'.
+            device: Device to run the model on. Options are:
+                - 'cuda': Use GPU (requires CUDA)
+                - 'cpu': Use CPU only
+                - None: Auto-detect (use GPU if available)
+                Defaults to None (auto-detect).
+            language: ISO 639-1 language code (e.g., 'en', 'es', 'fr') or None
+                for automatic language detection. Defaults to None.
+        
+        Example:
+            >>> # Use small model with English language
+            >>> extractor = TranscriptExtractor(
+            ...     model_size="small",
+            ...     language="en"
+            ... )
+            
+            >>> # Use GPU if available
+            >>> extractor = TranscriptExtractor(
+            ...     model_size="base",
+            ...     device="cuda"
+            ... )
+        """
+        self.model_size = model_size
+        self.device = device
+        self.language = language
+        self._model = None
+
+    
