@@ -244,4 +244,26 @@ class TranscriptExtractor:
         self.language = language
         self._model = None
 
-    
+    def _load_model(self) -> None:
+        """Lazy load the Whisper model.
+        
+        Loads the Whisper model on first use to avoid initialization overhead
+        when the extractor is created but not immediately used.
+        
+        Raises:
+            ImportError: If openai-whisper package is not installed.
+            RuntimeError: If the model fails to load.
+        """
+        if self._model is None:
+            try:
+                import whisper
+                self._model = whisper.load_model(
+                    self.model_size,
+                    device=self.device
+                )
+            except ImportError:
+                raise ImportError(
+                    "openai-whisper is not installed. "
+                    "Install it with: pip install openai-whisper"
+                )
+            
