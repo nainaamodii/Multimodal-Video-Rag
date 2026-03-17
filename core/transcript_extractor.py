@@ -114,4 +114,23 @@ class Transcript:
             "full_text": self.full_text
         }
     
-    
+    def save(self, output_path: Union[str, Path]) -> None:
+        """Save transcript to JSON file.
+        
+        Saves the complete transcript including all segments and metadata
+        to a JSON file with UTF-8 encoding.
+        
+        Args:
+            output_path: Path where the JSON file should be saved.
+            
+        Raises:
+            IOError: If the file cannot be written.
+            
+        Example:
+            >>> transcript.save("output/transcript.json")
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
