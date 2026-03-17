@@ -134,3 +134,42 @@ class Transcript:
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> Transcript:
+        """Load transcript from JSON file.
+        
+        Reads a previously saved transcript from a JSON file and reconstructs
+        the Transcript object with all segments and metadata.
+        
+        Args:
+            path: Path to the JSON file to load.
+            
+        Returns:
+            Reconstructed Transcript object.
+            
+        Raises:
+            FileNotFoundError: If the specified file doesn't exist.
+            json.JSONDecodeError: If the file is not valid JSON.
+            KeyError: If required fields are missing from the JSON.
+            
+        Example:
+            >>> transcript = Transcript.load("transcript.json")
+            >>> print(transcript.language)
+            en
+        """
+        path = Path(path)
+        
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        segments = [
+            TranscriptSegment(**seg) for seg in data['segments']
+        ]
+        
+        return cls(
+            video_path=Path(data['video_path']),
+            language=data['language'],
+            segments=segments,
+            full_text=data['full_text']
+        )
