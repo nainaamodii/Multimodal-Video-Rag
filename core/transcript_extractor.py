@@ -266,4 +266,79 @@ class TranscriptExtractor:
                     "openai-whisper is not installed. "
                     "Install it with: pip install openai-whisper"
                 )
-            
+
+    def extract(
+        self,
+        video_path: Union[str, Path],
+        output_path: Optional[Union[str, Path]] = None
+    ) -> Transcript:
+        """Extract transcript from a video file.
+        
+        Processes the video file through Whisper to extract the audio transcript
+        with timestamps. The model is loaded on first use if not already loaded.
+        
+        Args:
+            video_path: Path to the video file to transcribe. Supports common
+                video formats (mp4, avi, mov, mkv, etc.).
+            output_path: Optional path to save the transcript as JSON. If provided,
+                the transcript will be automatically saved after extraction.
+                Defaults to None (no automatic save).
+        
+        Returns:
+            Transcript object containing the full text, language, and timestamped
+            segments.
+        
+        Raises:
+            FileNotFoundError: If the video file doesn't exist.
+            RuntimeError: If Whisper fails to process the video.
+            ImportError: If openai-whisper is not installed.
+        
+        Example:
+            >>> extractor = TranscriptExtractor()
+            >>> transcript = extractor.extract(
+            ...     "tutorial.mp4",
+            ...     output_path="transcript.json"
+            ... )
+            >>> print(f"Detected language: {transcript.language}")
+            Detected language: en
+            >>> print(f"Duration: {transcript.segments[-1].end}s")
+            Duration: 125.5s
+        """
+        video_path = Path(video_path)
+        
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        
+        # Load model if not already loaded
+        self._load_model()
+        
+        # Transcribe the video
+        result = self._model.transcribe(
+            str(video_path),
+            language=self.language,
+            verbose=False
+        )
+        
+        # Convert segments
+        segments = [
+            TranscriptSegment(
+                start=seg['start'],
+                end=seg['end'],
+                text=seg['text'].strip()
+            )
+            for seg in result['segments']
+        ]
+        
+        # Create transcript object
+        transcript = Transcript(
+            video_path=video_path,
+            language=result['language'],
+            segments=segments,
+            full_text=result['text'].strip()
+        )
+        
+        # Save if output path provided
+        if output_path:
+            transcript.save(Path(output_path))
+        
+        return transcript      
