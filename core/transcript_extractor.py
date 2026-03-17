@@ -341,4 +341,60 @@ class TranscriptExtractor:
         if output_path:
             transcript.save(Path(output_path))
         
-        return transcript      
+        return transcript    
+
+    def extract_batch(
+        self,
+        video_paths: List[Union[str, Path]],
+        output_dir: Optional[Union[str, Path]] = None
+    ) -> List[Transcript]:
+        """Extract transcripts from multiple videos.
+        
+        Processes multiple video files sequentially, extracting transcripts
+        from each. Optionally saves each transcript to a JSON file in the
+        specified output directory.
+        
+        Args:
+            video_paths: List of paths to video files to transcribe.
+            output_dir: Optional directory to save transcript JSON files.
+                If provided, each transcript will be saved as
+                "{video_stem}_transcript.json". The directory will be created
+                if it doesn't exist. Defaults to None (no automatic save).
+        
+        Returns:
+            List of Transcript objects, one for each input video in the same order.
+        
+        Raises:
+            FileNotFoundError: If any video file doesn't exist.
+            RuntimeError: If Whisper fails to process any video.
+        
+        Example:
+            >>> extractor = TranscriptExtractor(model_size="small")
+            >>> videos = ["video1.mp4", "video2.mp4", "video3.mp4"]
+            >>> transcripts = extractor.extract_batch(
+            ...     videos,
+            ...     output_dir="transcripts/"
+            ... )
+            >>> for t in transcripts:
+            ...     print(f"{t.video_path.name}: {t.language}")
+            video1.mp4: en
+            video2.mp4: es
+            video3.mp4: fr
+        """
+        transcripts = []
+        
+        for video_path in video_paths:
+            video_path = Path(video_path)
+            
+            # Determine output path if directory provided
+            output_path = None
+            if output_dir:
+                output_dir = Path(output_dir)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{video_path.stem}_transcript.json"
+            
+            # Extract transcript
+            transcript = self.extract(video_path, output_path)
+            transcripts.append(transcript)
+        
+        return transcripts  
