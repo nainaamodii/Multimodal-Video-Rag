@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Poetry
+poetry.lock
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+data/
+videos/
+frames/
+*.h5
+*.ckpt
+*.pth
+*.safetensors
+
+# Test outputs
+test_outputs/
+test_transcript.json
+test_frames/
+pipeline_frames/
+pipeline_demo.db/
+*.db/
+test_env/
+test_env_v2/
+
+# Test scripts (dev only)
+test_*.py
+
+# Private files
+ROADMAP_PRIVATE.md
+
+# Environment variables
+.env
+
+# Logs
+*.log
+logs/
+coverage.xml
