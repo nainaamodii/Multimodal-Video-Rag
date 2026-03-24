@@ -89,7 +89,100 @@ class TranscriptExtractor:
                     "openai-whisper is not installed. "
                     "Install it with: pip install openai-whisper"
                 )
-    
+            
+    def chunk_transcript(
+        self, 
+        transcript: Transcript, 
+        target_word_count: int = 150, 
+        overlap_count: int = 30
+    ) -> List[TranscriptSegment]:
+        """
+        Groups raw Whisper segments into uniform chunks with overlap.
+        
+        Args:
+            transcript: The Transcript object containing raw segments.
+            target_word_count: Ideal number of words per chunk.
+            overlap_count: How many words to keep from the previous chunk for context.
+        """
+        raw_segments = transcript.segments
+        chunks = []
+        
+        current_text = []
+        current_word_count = 0
+        start_time = raw_segments[0].start if raw_segments else 0.0
+
+        for i, seg in enumerate(raw_segments):
+            words = seg.text.split()
+            current_text.extend(words)
+            current_word_count += len(words)
+
+            # If we reached the target size, or it's the last segment
+            if current_word_count >= target_word_count or i == len(raw_segments) - 1:
+                chunk_text = " ".join(current_text)
+                
+                chunks.append(TranscriptSegment(
+                    start=start_time,
+                    end=seg.end,
+                    text=chunk_text
+                ))
+
+                # Handle Overlap: Keep the last 'overlap_count' words for the next chunk
+                overlap_words = current_text[-overlap_count:] if len(current_text) > overlap_count else []
+                current_text = overlap_words
+                current_word_count = len(current_text)
+                
+                # The start time of the next chunk is roughly the start of the current segment
+                # (or more accurately, the start of the overlap period)
+                start_time = seg.start 
+
+        return chunks
+
+    def extract(
+        self,
+        video_path: Union[str, Path],
+        output_path: Optional[Union[str, Path]] = None,
+        do_chunking: bool = True # Added a flag to trigger chunking
+    ) -> Transcript:
+        
+        video_path = Path(video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        
+        self._load_model()
+        
+        result = self._model.transcribe(
+            str(video_path),
+            language=self.language,
+            verbose=False
+        )
+        
+        # Initial raw segments from Whisper
+        segments = [
+            TranscriptSegment(
+                start=seg['start'],
+                end=seg['end'],
+                text=seg['text'].strip()
+            )
+            for seg in result['segments']
+        ]
+        
+        temp_transcript = Transcript(
+            video_path=video_path,
+            language=result['language'],
+            segments=segments,
+            full_text=result['text'].strip()
+        )
+
+        # Apply the uniform chunking logic
+        if do_chunking:
+            uniform_segments = self.chunk_transcript(temp_transcript)
+            temp_transcript.segments = uniform_segments
+        
+        if output_path:
+            temp_transcript.save(Path(output_path))
+        
+        return temp_transcript
+    """""
     def extract(
         self,
         video_path: Union[str, Path],
@@ -129,7 +222,7 @@ class TranscriptExtractor:
             transcript.save(Path(output_path))
         
         return transcript
-    
+    """
     def extract_batch(
         self,
         video_paths: List[Union[str, Path]],
