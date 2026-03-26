@@ -12,7 +12,7 @@ from loguru import logger
 def main() -> None:
     # Entry point for CLI commands
     
-    logger.info("🎬 FrameWise - AI-powered video tutorial assistant")
+    logger.info(" FrameWise - AI-powered video tutorial assistant")
     logger.info("=" * 50)
 
     # Check if command is provided

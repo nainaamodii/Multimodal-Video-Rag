@@ -59,7 +59,7 @@ Guidelines:
         Args:
             vector_store: FrameWiseVectorStore instance with indexed frames
             embedder: FrameWiseEmbedder instance for query embedding
-            model: Claude model to use
+            model:  modelGoogle Gemini to use
             max_tokens: Maximum tokens in response
             temperature: LLM temperature (0-1)
             api_key: Anthropic API key (or set ANTHROPIC_API_KEY env var)
@@ -75,7 +75,7 @@ Guidelines:
                 "or pass api_key parameter"
             )
         
-        # Initialize Claude with LangChain
+        # Initialize llm with LangChain
         self.llm = ChatGoogleGenerativeAI(
             model=model,
             max_tokens=max_tokens,
@@ -129,7 +129,7 @@ Guidelines:
         context = self._build_context(results)
         
         # Step 3: Generate answer with LLM
-        logger.info("Generating answer with Claude...")
+        logger.info("Generating answer ...")
         answer = self._generate_answer(question, context)
         
         # Step 4: Format response
@@ -218,8 +218,8 @@ Please provide a clear, helpful answer. Reference specific timestamps when relev
         if not last_user_message:
             raise ValueError("No user message found in conversation")
         
-        # For now, treat as single question
-        # TODO: Implement conversation memory
+      
+        # TO DO: Implement conversation memory
         return self.ask(last_user_message, num_results=num_results)
     
     def batch_ask(
