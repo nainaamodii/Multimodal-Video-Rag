@@ -4,7 +4,7 @@ Question-Answering system using LLM with retrieved frames
 
 import os
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional,Union
 from loguru import logger
 
 try:
@@ -236,3 +236,28 @@ Please provide a clear, helpful answer. Reference specific timestamps when relev
         
         logger.success(f"Answered {len(questions)} questions")
         return answers
+    
+    def generate_summary_from_file(self, transcript_txt_path: Union[str, Path]) -> str:
+        """
+        Reads the full text transcript from a file and generates a global summary.
+        """
+        txt_path = Path(transcript_txt_path)
+        
+        if not txt_path.exists():
+            logger.error(f"Summary failed: File {txt_path} not found.")
+            return "Transcript file not found. Please process the video again."
+
+        with open(txt_path, 'r', encoding='utf-8') as f:
+            full_content = f.read()
+
+        logger.info(f"Generating summary for {len(full_content.split())} words...")
+
+        summary_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are FrameWise, an expert video analyst. Create a clear, structured summary of the video transcript provided."),
+            ("human", "Please summarize the following video transcript. Use bullet points for key takeaways:\n\n{transcript}")
+        ])
+
+        chain = summary_prompt | self.llm
+        response = chain.invoke({"transcript": full_content})
+        
+        return response.content   
