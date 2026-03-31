@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Optional, Dict, List, Union
 from dataclasses import dataclass
 import json
-
+import os
+from loguru import logger
 
 @dataclass
 class TranscriptSegment:
@@ -96,14 +97,7 @@ class TranscriptExtractor:
         target_word_count: int = 150, 
         overlap_count: int = 30
     ) -> List[TranscriptSegment]:
-        """
-        Groups raw Whisper segments into uniform chunks with overlap.
-        
-        Args:
-            transcript: The Transcript object containing raw segments.
-            target_word_count: Ideal number of words per chunk.
-            overlap_count: How many words to keep from the previous chunk for context.
-        """
+       
         raw_segments = transcript.segments
         chunks = []
         
@@ -155,6 +149,15 @@ class TranscriptExtractor:
             language=self.language,
             verbose=False
         )
+
+        # This is the full text we need
+        raw_text = result['text'].strip()
+
+        if output_path:
+            txt_path = Path(output_path).with_suffix('.txt')
+            with open(txt_path, 'w', encoding='utf-8') as f:
+                f.write(raw_text)
+            logger.info(f"Full transcript text saved to: {txt_path}")
         
         # Initial raw segments from Whisper
         segments = [
@@ -170,7 +173,7 @@ class TranscriptExtractor:
             video_path=video_path,
             language=result['language'],
             segments=segments,
-            full_text=result['text'].strip()
+            full_text=raw_text
         )
 
         # Apply the uniform chunking logic
@@ -182,47 +185,7 @@ class TranscriptExtractor:
             temp_transcript.save(Path(output_path))
         
         return temp_transcript
-    """""
-    def extract(
-        self,
-        video_path: Union[str, Path],
-        output_path: Optional[Union[str, Path]] = None
-    ) -> Transcript:
-        
-        video_path = Path(video_path)
-        
-        if not video_path.exists():
-            raise FileNotFoundError(f"Video file not found: {video_path}")
-        
-        self._load_model()
-        
-        result = self._model.transcribe(
-            str(video_path),
-            language=self.language,
-            verbose=False
-        )
-        
-        segments = [
-            TranscriptSegment(
-                start=seg['start'],
-                end=seg['end'],
-                text=seg['text'].strip()
-            )
-            for seg in result['segments']
-        ]
-        
-        transcript = Transcript(
-            video_path=video_path,
-            language=result['language'],
-            segments=segments,
-            full_text=result['text'].strip()
-        )
-        
-        if output_path:
-            transcript.save(Path(output_path))
-        
-        return transcript
-    """
+    
     def extract_batch(
         self,
         video_paths: List[Union[str, Path]],
