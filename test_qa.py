@@ -1,9 +1,10 @@
-"""
-Test the complete FrameWise Q&A system with gemini
-"""
-
+import streamlit as st
+import time
+import tempfile
 from pathlib import Path
-from loguru import logger
+from dotenv import load_dotenv
+
+# Importing your specific backend classes
 from framewise import (
     TranscriptExtractor,
     FrameExtractor,
@@ -11,144 +12,222 @@ from framewise import (
     FrameWiseVectorStore,
     FrameWiseQA,
 )
-from framewise.utils.transcript_corrections import create_product_corrector
-from dotenv import load_dotenv
 
 load_dotenv()
 
-def main():
-    """Test Q&A system with gemini"""
-    
-    VIDEO_PATH = f"dataset\\#2 Machine Learning Specialization [Course 1, Week 1, Lesson 1] [wiNXzydta4c].mp4"
-    
-    logger.info("🎬 FrameWise Q&A System Test")
-    logger.info("=" * 60)
-    
-    # Check if we already have processed data
-    db_path = Path("test_outputs/search_test.db")
-    frames_dir = Path("test_outputs/frames")
-    
-    if not db_path.exists() or not frames_dir.exists():
-        logger.info("\n📦 Processing video (first time setup)...")
-        logger.info("-" * 60)
-        
-        # Extract transcript
-        logger.info("Extracting transcript...")
-        transcript_extractor = TranscriptExtractor(model_size="base")
-        transcript = transcript_extractor.extract(VIDEO_PATH)
-        logger.success(f"✓ {len(transcript.segments)} segments")
-        
+# --- Page Config & Custom Styling (Preserved from your previous design) ---
+st.set_page_config(page_title="FrameWise", layout="wide")
 
-        # Extract frames
-        logger.info("Extracting frames...")
-        frame_extractor = FrameExtractor(
-            strategy="hybrid",
-            max_frames_per_video=15,
-            scene_threshold=0.3,
-            quality_threshold=0.1
-        )
-        frames = frame_extractor.extract(
-            video_path=VIDEO_PATH,
-            transcript=transcript,
-            output_dir="test_outputs/frames"
-        )
-        logger.success(f"✓ {len(frames)} frames")
-        
-        if len(frames) == 0:
-            logger.error("No frames extracted - cannot proceed")
-            return
-        
-        # Generate embeddings
-        logger.info("Generating embeddings...")
-        embedder = FrameWiseEmbedder(
-            text_model="all-MiniLM-L6-v2",
-            vision_model="openai/clip-vit-base-patch32",
-            device="cpu"  # Use "cuda" if you have GPU
-        )
-        embeddings = embedder.embed_frames_batch(frames, batch_size=4)
-        logger.success(f"✓ {len(embeddings)} embeddings")
-        
-        # Create database
-        logger.info("Creating vector database...")
-        vector_store = FrameWiseVectorStore(
-            db_path="test_outputs/search_test.db",
-            table_name="frames"
-        )
-        vector_store.create_table(embeddings, mode="overwrite")
-        logger.success("✓ Database created")
+st.markdown("""
+<style>
+body, .stApp { background: #f7f9fc; color: #111; }
+.block-container { padding: 2rem 3rem; }
+
+h1 { font-size: 32px; margin-bottom: 0; }
+.sub { color: #666; font-size: 14px; margin-bottom: 24px; }
+
+.card {
+    background: #ffffff;
+    border: 1px solid #e6e8eb;
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.chat-user {
+    text-align: right;
+    background: #e8f0fe;
+    padding: 10px 14px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+}
+
+.chat-ai {
+    background: #f1f3f6;
+    padding: 10px 14px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+}
+
+button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+}
+
+.empty {
+    text-align:center;
+    padding:20px;
+    color:#666;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# --- Session State Management ---
+# Initializing keys if they don't exist
+if "processed" not in st.session_state:
+    st.session_state.update({
+        "processed": False,
+        "processing": False,
+        "summary": None,
+        "chat": [],
+        "video_path": None,
+        "video_name": None,
+        "seek_time": 0,
+        "transcript_obj": None,
+        "qa_engine": None
+    })
+
+def format_ts(t):
+    m = int(t) // 60
+    s = int(t) % 60
+    return f"{m}:{s:02d}"
+
+# --- Title Header ---
+st.title("🎞️ FrameWise")
+st.markdown('<div class="sub">Video Intelligence · Multimodal RAG</div>', unsafe_allow_html=True)
+
+col1, col2 = st.columns([1, 2])
+
+# --- LEFT PANEL: Upload & Process ---
+with col1:
+    uploaded = st.file_uploader("Upload Video", type=["mp4", "mov", "avi"])
+
+    if uploaded:
+        if st.session_state.video_name != uploaded.name:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded.name).suffix)
+            tmp.write(uploaded.read())
+            st.session_state.video_path = tmp.name
+            st.session_state.video_name = uploaded.name
+            st.session_state.processed = False
+            st.session_state.chat = []
+            st.session_state.summary = None
+
+        st.markdown(f'<div class="card"><b>{uploaded.name}</b></div>', unsafe_allow_html=True)
+
+    if st.button("Process Video", use_container_width=True):
+        if not uploaded:
+            st.warning("Upload a video to begin")
+        else:
+            st.session_state.processing = True
+            
+            # Real Backend Pipeline Execution
+            with st.spinner("Analyzing Video Content..."):
+                # 1. Extract Transcript
+                te = TranscriptExtractor(model_size="base")
+                transcript = te.extract(st.session_state.video_path)
+                st.session_state.transcript_obj = transcript
+                
+                # 2. Extract & Embed Frames (Hybrid Strategy)
+                fe = FrameExtractor(strategy="hybrid", max_frames_per_video=15)
+                frames_dir = Path("app_data/frames")
+                frames = fe.extract(st.session_state.video_path, transcript, output_dir=str(frames_dir))
+                
+                embedder = FrameWiseEmbedder(device="cpu")
+                embeddings = embedder.embed_frames_batch(frames)
+                
+                # 3. Setup Vector Store & QA Engine
+                vector_store = FrameWiseVectorStore(db_path="app_data/framewise.db")
+                vector_store.create_table(embeddings, mode="overwrite")
+                
+                st.session_state.qa_engine = FrameWiseQA(
+                    vector_store=vector_store,
+                    embedder=embedder,
+                    model="gemini-1.5-flash" # Ensure this matches your package capability
+                )
+                
+                st.session_state.processed = True
+                st.session_state.processing = False
+                st.rerun()
+
+# --- RIGHT PANEL: Video, Summary & Chat ---
+with col2:
+    if st.session_state.video_path:
+        st.video(st.session_state.video_path, start_time=int(st.session_state.seek_time))
+
+    if st.session_state.processing:
+        st.info("Processing video with Whisper and CLIP...")
+
+    # --- SUMMARY SECTION ---
+    st.markdown('<div class="card"><b>📋 Summary</b><br><br>', unsafe_allow_html=True)
+
+    if not st.session_state.processed:
+        st.markdown("""
+        <div class="empty">
+            <div style="font-size:28px;">🎬</div>
+            <div style="font-weight:500; margin-top:8px;">Your video summary will appear here</div>
+            <div style="font-size:13px; margin-top:6px;">Upload and process a video to unlock insights ✨</div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        logger.info("\n✓ Using existing processed data")
-        embedder = FrameWiseEmbedder()
-        vector_store = FrameWiseVectorStore(
-            db_path="test_outputs/search_test.db",
-            table_name="frames"
-        )
-    
-    # Initialize Q&A system
-    logger.info("\n🤖 Initializing Q&A System with gemini...")
-    logger.info("-" * 60)
-    
-    try:
-        qa = FrameWiseQA(
-            vector_store=vector_store,
-            embedder=embedder,
-            model="gemini-2.5-flash",
-            max_tokens=1024,
-            temperature=0.7,
-            api_key=None  # Will read from .env or environment variable
-        )
-        logger.success("✓ Q&A system ready")
-    except ValueError as e:
-        logger.error(f"❌ {e}")
-        logger.info("\n💡 To fix:")
-        logger.info("1. Copy .env.example to .env")
-        logger.info("2. Add your gemini API key to .env")
-        logger.info("3. Run this script again")
-        return
-    
-    # Ask questions
-    logger.info("\n🔍 Asking Questions...")
-    logger.info("=" * 60)
-    
-    questions = [
-        "What is the main topic of this video?",
-        "What are the key concepts covered in the first 5 minutes?",
-        "Can you summarize the section about supervised learning?",
-        "What is the timestamp for when machine learning is first mentioned?",
-    ]
-    
-    for i, question in enumerate(questions, 1):
-        logger.info(f"\n{'='*60}")
-        logger.info(f"Question {i}: {question}")
-        logger.info("-" * 60)
-        
-        try:
-            response = qa.ask(question, num_results=3)
-            
-            logger.success("\n✅ Answer:")
-            logger.info(f"{response['answer']}")
-            
-            logger.info(f"\n📊 Supporting Evidence ({response['num_frames_used']} frames):")
-            for j, frame in enumerate(response['relevant_frames'], 1):
-                logger.info(f"\n  Frame {j}:")
-                logger.info(f"    Time: {frame['timestamp']:.1f}s")
-                logger.info(f"    Text: '{frame['text']}'")
-                if frame['frame_path']:
-                    logger.info(f"    Image: {Path(frame['frame_path']).name}")
-        
-        except Exception as e:
-            logger.error(f"❌ Error: {e}")
-    
-    logger.info("\n" + "=" * 60)
-    logger.success("✅ Q&A Test Complete!")
-    logger.info("\n🎯 What just happened:")
-    logger.info("   1. Retrieved relevant frames from vector database")
-    logger.info("   2. Built context with transcripts + timestamps")
-    logger.info("   3. gemini generated natural language answers")
-    logger.info("   4. Provided visual evidence (frame references)")
-    
-    logger.info("\n🚀 FrameWise is now a complete AI assistant!")
+        # Check if summary already exists in state
+        if st.session_state.summary:
+            st.write(st.session_state.summary)
+        else:
+            if st.button("Generate Summary"):
+                # Using the full_text from your Transcript class to generate summary via Gemini
+                prompt = f"Provide a concise summary of this video based on the transcript: {st.session_state.transcript_obj.full_text[:4000]}"
+                response = st.session_state.qa_engine.ask(prompt)
+                st.session_state.summary = response['answer']
+                st.rerun()
 
+    st.markdown('</div>', unsafe_allow_html=True)
 
-if __name__ == "__main__":
-    main()
+    # --- Q&A SECTION ---
+    st.markdown('<div class="card"><b>💬 Ask Questions</b><br><br>', unsafe_allow_html=True)
+
+    if not st.session_state.processed:
+        st.markdown("""
+        <div class="empty">
+            <div style="font-size:24px;">🧠</div>
+            <div style="font-weight:500; margin-top:6px;">Ask anything about your video</div>
+            <div style="font-size:13px; margin-top:4px;">Process a video first to start chatting</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Display Chat History
+        for idx, msg in enumerate(st.session_state.chat):
+            role_css = "chat-user" if msg["role"] == "user" else "chat-ai"
+            st.markdown(f'<div class="{role_css}">{msg["text"]}</div>', unsafe_allow_html=True)
+
+            if msg.get("ts"):
+                # Create timestamp buttons for navigation
+                ts_count = len(msg["ts"])
+                if ts_count > 0:
+                    ts_cols = st.columns(min(ts_count, 4))
+                    for i, t in enumerate(msg["ts"][:4]): # Showing up to 4 timestamps
+                        with ts_cols[i]:
+                            if st.button(f"⏱ {format_ts(t)}", key=f"chat_ts_{idx}_{i}"):
+                                st.session_state.seek_time = t
+                                st.rerun()
+
+        # Input Area
+        q_col, btn_col = st.columns([4, 1])
+        with q_col:
+            user_query = st.text_input(
+                "",
+                placeholder="Ask about scenes, concepts, or moments...",
+                key="query_input",
+                disabled=not st.session_state.processed
+            )
+
+        with btn_col:
+            ask_clicked = st.button("Ask", disabled=not st.session_state.processed)
+
+        if ask_clicked and user_query.strip():
+            st.session_state.chat.append({"role": "user", "text": user_query})
+            
+            # Fetch real response from QA Engine
+            response = st.session_state.qa_engine.ask(user_query, num_results=3)
+            
+            # Extract timestamps from the relevant_frames metadata
+            timestamps = [f['timestamp'] for f in response.get('relevant_frames', [])]
+            
+            st.session_state.chat.append({
+                "role": "ai", 
+                "text": response['answer'], 
+                "ts": timestamps
+            })
+            st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
