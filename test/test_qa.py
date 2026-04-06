@@ -228,15 +228,10 @@ def load_existing(meta: dict) -> tuple:
 def get_summary(qa) -> str:
     """Generate a structured, comprehensive summary of the video."""
     summary_question = (
-        "You are an expert tutor. Please provide a detailed, comprehensive summary of this lecture. "
-        "1. Start with a brief 'Overview' paragraph. "
-        "2. Break down the core concepts into bulleted sections. "
-        "3. Explain the technical processes mentioned (e.g., how the algorithm works). "
-        "4. Summarize the key takeaways for a student. "
-        "Use enough detail to act as a study guide."
+        "Give in detail summary of this video."
     )
     # Increase top_k to include more video segments for context
-    response = qa.ask(summary_question, top_k=20) 
+    response = qa.ask(summary_question) 
     return response["answer"]
 
 
