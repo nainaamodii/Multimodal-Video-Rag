@@ -1,10 +1,25 @@
 [project]
-name = "main-multimodal-agentic-video-rag"
+name = "eduquery"
 version = "0.1.0"
-description = "Add your description here"
+description = "Multimodal Video RAG for Educational Content"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "openai>=1.0.0",
+    "transformers>=4.0.0",
+    "sentence-transformers>=2.0.0",
+    "lancedb>=0.5.0",
+    "opencv-python>=4.0.0",
+    "pillow>=10.0.0",
+    "torch>=2.0.0",
+    "langchain-google-genai>=0.1.0",
+    "loguru>=0.7.0",
+    "python-dotenv>=1.0.0",
+    "yt-dlp>=2023.0.0",
+    "openai-whisper>=20231117",
+    "streamlit>=1.56.0",
+    "torchvision>=0.26.0",
+]
 
 
 [tool.uv.extra-build-dependencies]
