@@ -1,4 +1,4 @@
-# 🎓 VisionVault — Multimodal Video RAG
+# 🎓 EduQuery — Multimodal Video RAG
 
 A Retrieval-Augmented Generation (RAG) system for educational video content. Upload a lecture video, get an AI-generated summary, and ask natural-language questions — with timestamped source citations pulled directly from the video.
 
